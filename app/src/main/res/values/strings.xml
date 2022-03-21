@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Instantroom</string>
+    <string name="back4app_server_url">https://parseapi.back4app.com/</string>
+
+    <!-- Paste BOTH strings as required -->
+    <string name="back4app_app_id">KqEgpn7FQcP4vC69BgsCCDjVTcwZCCQnCraBcPPP</string>
+    <string name="back4app_client_key">pQqSIoE1RnhT0JYbQSMa3muN2IR5tG3S10wLAr4q</string>
+</resources>
