@@ -41,6 +41,11 @@ class MainActivity : AppCompatActivity() {
 //        queryPosts()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        ParseUser.logOutInBackground()
+    }
+
     private fun submitPost(description: String, user: ParseUser, file: File) {
         val post = Post()
         post.setDescription(description)
