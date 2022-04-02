@@ -1,35 +1,37 @@
 package com.moise.instantroom.fragments
 
+import android.content.Intent
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import com.moise.instantroom.MainActivity
+import com.moise.instantroom.Post
 import com.moise.instantroom.R
+import com.parse.ParseFile
+import com.parse.ParseUser
+import java.io.File
 
-// TODO: Rename parameter arguments, choose names that match
-// the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-private const val ARG_PARAM1 = "param1"
-private const val ARG_PARAM2 = "param2"
 
-/**
- * A simple [Fragment] subclass.
- * Use the [ComposeFragment.newInstance] factory method to
- * create an instance of this fragment.
- */
 class ComposeFragment : Fragment() {
-    // TODO: Rename and change types of parameters
-    private var param1: String? = null
-    private var param2: String? = null
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        arguments?.let {
-            param1 = it.getString(ARG_PARAM1)
-            param2 = it.getString(ARG_PARAM2)
-        }
-    }
-
+    private var photoFile: File? = null
+    private lateinit var ivPreview: ImageView
+    private lateinit var etDescription: TextView
+//    private var _binding: FragmentComposeBinding? = null
+//    private val binding get() = _binding!!
+    private val photoFileName = "photo.jpg"
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -38,23 +40,100 @@ class ComposeFragment : Fragment() {
         return inflater.inflate(R.layout.fragment_compose, container, false)
     }
 
-    companion object {
-        /**
-         * Use this factory method to create a new instance of
-         * this fragment using the provided parameters.
-         *
-         * @param param1 Parameter 1.
-         * @param param2 Parameter 2.
-         * @return A new instance of fragment ComposeFragment.
-         */
-        // TODO: Rename and change types and number of parameters
-        @JvmStatic
-        fun newInstance(param1: String, param2: String) =
-            ComposeFragment().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_PARAM1, param1)
-                    putString(ARG_PARAM2, param2)
-                }
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        view.findViewById<Button>(R.id.btnTakePicture).setOnClickListener{
+            onLaunchCamera()
+        }
+        ivPreview = view.findViewById(R.id.ivPicture)
+        etDescription = view.findViewById(R.id.etDescription)
+        view.findViewById<Button>(R.id.btnPost).setOnClickListener{
+            val user = ParseUser.getCurrentUser()
+            val description = etDescription.text.toString()
+            if (photoFile != null)
+                submitPost(description, user, photoFile!!)
+            else
+                Toast.makeText(requireContext(), "You need a nice pic to show the world what's happening!", Toast.LENGTH_SHORT).show()
+
+
+        }
+    }
+    private fun submitPost(description: String, user: ParseUser, file: File) {
+        val post = Post()
+        post.setDescription(description)
+        post.setUser(user)
+        post.setImage(ParseFile(file))
+        post.saveInBackground{exception ->
+            if(exception != null){
+                Log.d(MainActivity.TAG, "submitPost: Error while posting")
+                exception.printStackTrace()
+                Toast.makeText(requireContext(), "Error while making post", Toast.LENGTH_SHORT).show()
+            }else{
+                Toast.makeText(requireContext(), "Post was successful!!", Toast.LENGTH_SHORT).show()
+                Log.d(MainActivity.TAG, "submitPost: Post successful")
+                etDescription.text = null
+                ivPreview.setImageDrawable(null)
             }
+        }
+    }
+    private fun onLaunchCamera() {
+        // create Intent to take a picture and return control to the calling application
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+        // Create a File reference for future access
+        photoFile = getPhotoFileUri(photoFileName)
+
+        // wrap File object into a content provider
+        // required for API >= 24
+        // See https://guides.codepath.com/android/Sharing-Content-with-Intents#sharing-files-with-api-24-or-higher
+        if (photoFile != null) {
+            val fileProvider: Uri =
+                FileProvider.getUriForFile(requireContext(), "com.moise.fileprovider", photoFile!!)
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, fileProvider)
+
+            // If you call startActivityForResult() using an intent that no app can handle, your app will crash.
+            // So as long as the result is not null, it's safe to use the intent.
+
+            // If you call startActivityForResult() using an intent that no app can handle, your app will crash.
+            // So as long as the result is not null, it's safe to use the intent.
+            if (intent.resolveActivity(requireContext().packageManager) != null) {
+                // Start the image capture intent to take photo
+                startActivityForResult(intent, CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE)
+            }
+        }
+    }
+
+    // Returns the File for a photo stored on disk given the fileName
+    private fun getPhotoFileUri(fileName: String): File {
+        // Get safe storage directory for photos
+        // Use `getExternalFilesDir` on Context to access package-specific directories.
+        // This way, we don't need to request external read/write runtime permissions.
+        val mediaStorageDir =
+            File(requireContext().getExternalFilesDir(Environment.DIRECTORY_PICTURES), MainActivity.TAG)
+
+        // Create the storage directory if it does not exist
+        if (!mediaStorageDir.exists() && !mediaStorageDir.mkdirs()) {
+            Log.d(MainActivity.TAG, "failed to create directory")
+        }
+
+        // Return the file target for the photo based on filename
+        return File(mediaStorageDir.path + File.separator + fileName)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE) {
+            if (resultCode == AppCompatActivity.RESULT_OK) {
+                // by this point we have the camera photo on disk
+                val takenImage = BitmapFactory.decodeFile(photoFile!!.absolutePath)
+                // RESIZE BITMAP, see section below
+                // Load the taken image into a preview
+                ivPreview.setImageBitmap(takenImage)
+            } else { // Result was a failure
+                Toast.makeText(context, "Picture wasn't taken!", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    companion object {
+        const val CAPTURE_IMAGE_ACTIVITY_REQUEST_CODE = 1
     }
 }
